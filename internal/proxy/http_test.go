@@ -56,6 +56,34 @@ func TestProxy_InjectsBearerToken(t *testing.T) {
 	}
 }
 
+func TestProxy_InjectsBasicAuth(t *testing.T) {
+	var receivedAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	vault := &mockVault{creds: map[string]string{"TEST_CRED": "admin:secret123"}}
+	endpoint := config.Endpoint{
+		Upstream: upstream.URL,
+		Auth:     config.AuthConfig{Type: "basic", CredentialEnv: "TEST_CRED"},
+	}
+	engine := policy.New([]config.Rule{{Match: config.Match{Method: "*"}, Action: "allow"}})
+
+	proxy := New(endpoint, vault, engine)
+	req := httptest.NewRequest("GET", "/data", nil)
+	rec := httptest.NewRecorder()
+
+	proxy.ServeHTTP(rec, req)
+
+	// base64("admin:secret123") = "YWRtaW46c2VjcmV0MTIz"
+	expected := "Basic YWRtaW46c2VjcmV0MTIz"
+	if receivedAuth != expected {
+		t.Errorf("expected %q, got %q", expected, receivedAuth)
+	}
+}
+
 func TestProxy_InjectsHeaderAuth(t *testing.T) {
 	var receivedAuth string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

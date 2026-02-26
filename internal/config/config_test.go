@@ -1609,6 +1609,26 @@ endpoints:
 	}
 }
 
+func TestLoadConfig_BasicAuth(t *testing.T) {
+	yaml := `
+endpoints:
+  my-api:
+    upstream: https://api.example.com
+    auth:
+      type: basic
+      credential_env: MY_CREDS
+`
+	cfg, err := LoadFromReader(strings.NewReader(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ep := cfg.Endpoints["my-api"]
+	if ep.Auth.Type != "basic" {
+		t.Errorf("expected auth type 'basic', got %s", ep.Auth.Type)
+	}
+}
+
 func TestLoadConfig_HeaderAuth(t *testing.T) {
 	yaml := `
 endpoints:

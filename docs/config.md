@@ -193,7 +193,7 @@ endpoints:
 | `description` | string | Yes | Human-readable description |
 | `upstream` | string | Yes | Base URL of the API |
 | `docs_url` | string | No | Link to API documentation (exposed in discovery) |
-| `auth_type` | string | Yes | Auth type (`bearer`, `header`, or `plain`) |
+| `auth_type` | string | Yes | Auth type (`bearer`, `basic`, `header`, or `plain`) |
 | `capabilities` | array | No | List of named capabilities |
 | `default_rules` | array | No | Default rules when no capabilities specified |
 
@@ -429,7 +429,7 @@ Authentication configuration for the upstream service.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | Yes* | Authentication type (`bearer`, `header`, `plain`) |
+| `type` | string | Yes* | Authentication type (`bearer`, `basic`, `header`, `plain`) |
 | `credential_env` | string | Yes* | Environment variable containing the credential |
 | `header` | string | No | Header name (required when `type: header`) |
 | `prefix` | string | No | Value prefix (optional, used with `type: header`) |
@@ -442,6 +442,11 @@ Authentication configuration for the upstream service.
 auth:
   type: bearer
   credential_env: WARDGATE_CRED_TODOIST_API_KEY
+
+# Basic auth (credential_env value is user:password, base64-encoded automatically)
+auth:
+  type: basic
+  credential_env: WARDGATE_CRED_MY_API
 
 # Custom header auth (any header name and optional prefix)
 auth:
@@ -457,6 +462,7 @@ auth:
 
 Currently supported types:
 - `bearer` - Adds `Authorization: Bearer <credential>` header
+- `basic` - Adds `Authorization: Basic <base64(credential)>` header. Credential format is `user:password`.
 - `header` - Sets a custom header: `<header>: <prefix><credential>`. Requires `header` field; `prefix` is optional.
 - `plain` - For IMAP: credential format is `username:password`
 

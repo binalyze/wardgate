@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -198,6 +199,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				p.processSealedHeaders(req, r.Header)
 			} else if p.endpoint.Auth.Type == "bearer" {
 				req.Header.Set("Authorization", "Bearer "+cred)
+			} else if p.endpoint.Auth.Type == "basic" {
+				req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(cred)))
 			} else if p.endpoint.Auth.Type == "header" {
 				req.Header.Set(p.endpoint.Auth.Header, p.endpoint.Auth.Prefix+cred)
 			}
