@@ -251,8 +251,8 @@ type JWTConfig struct {
 // SealConfig defines sealed credential decryption settings.
 type SealConfig struct {
 	KeyEnv         string   `yaml:"key_env"`
-	CacheSize      int      `yaml:"cache_size,omitempty"`       // LRU cache capacity (default: 1000)
-	AllowedHeaders []string `yaml:"allowed_headers,omitempty"`  // Whitelist of headers that can be sealed
+	CacheSize      int      `yaml:"cache_size,omitempty"`      // LRU cache capacity (default: 1000)
+	AllowedHeaders []string `yaml:"allowed_headers,omitempty"` // Whitelist of headers that can be sealed
 }
 
 // ServerConfig holds server settings.
@@ -365,6 +365,8 @@ type SMTPConfig struct {
 type AuthConfig struct {
 	Type          string `yaml:"type"`
 	CredentialEnv string `yaml:"credential_env"`
+	Header        string `yaml:"header,omitempty"`
+	Prefix        string `yaml:"prefix,omitempty"`
 	Sealed        bool   `yaml:"sealed,omitempty"` // Credentials come from agent's sealed headers
 }
 
@@ -679,6 +681,9 @@ func (c *Config) validate() error {
 			}
 		} else if ep.Auth.Type == "" || ep.Auth.CredentialEnv == "" {
 			return fmt.Errorf("endpoint %q: missing auth configuration", name)
+		}
+		if ep.Auth.Type == "header" && ep.Auth.Header == "" {
+			return fmt.Errorf("endpoint %q: auth type \"header\" requires header field", name)
 		}
 		for i, rule := range ep.Rules {
 			if rule.Action == "" {

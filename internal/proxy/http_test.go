@@ -56,6 +56,58 @@ func TestProxy_InjectsBearerToken(t *testing.T) {
 	}
 }
 
+func TestProxy_InjectsHeaderAuth(t *testing.T) {
+	var receivedAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	vault := &mockVault{creds: map[string]string{"TEST_CRED": "my-access-key"}}
+	endpoint := config.Endpoint{
+		Upstream: upstream.URL,
+		Auth:     config.AuthConfig{Type: "header", Header: "Authorization", Prefix: "AccessKey ", CredentialEnv: "TEST_CRED"},
+	}
+	engine := policy.New([]config.Rule{{Match: config.Match{Method: "*"}, Action: "allow"}})
+
+	proxy := New(endpoint, vault, engine)
+	req := httptest.NewRequest("GET", "/data", nil)
+	rec := httptest.NewRecorder()
+
+	proxy.ServeHTTP(rec, req)
+
+	if receivedAuth != "AccessKey my-access-key" {
+		t.Errorf("expected 'AccessKey my-access-key', got '%s'", receivedAuth)
+	}
+}
+
+func TestProxy_InjectsHeaderAuthNoPrefix(t *testing.T) {
+	var receivedKey string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedKey = r.Header.Get("X-Api-Key")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	vault := &mockVault{creds: map[string]string{"TEST_CRED": "raw-key-value"}}
+	endpoint := config.Endpoint{
+		Upstream: upstream.URL,
+		Auth:     config.AuthConfig{Type: "header", Header: "X-Api-Key", CredentialEnv: "TEST_CRED"},
+	}
+	engine := policy.New([]config.Rule{{Match: config.Match{Method: "*"}, Action: "allow"}})
+
+	proxy := New(endpoint, vault, engine)
+	req := httptest.NewRequest("GET", "/data", nil)
+	rec := httptest.NewRecorder()
+
+	proxy.ServeHTTP(rec, req)
+
+	if receivedKey != "raw-key-value" {
+		t.Errorf("expected 'raw-key-value', got '%s'", receivedKey)
+	}
+}
+
 func TestProxy_PreservesOriginalHeaders(t *testing.T) {
 	var receivedHeaders http.Header
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

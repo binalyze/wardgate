@@ -1609,6 +1609,73 @@ endpoints:
 	}
 }
 
+func TestLoadConfig_HeaderAuth(t *testing.T) {
+	yaml := `
+endpoints:
+  bird-api:
+    upstream: https://api.bird.com/v1
+    auth:
+      type: header
+      header: Authorization
+      prefix: "AccessKey "
+      credential_env: BIRD_API_KEY
+`
+	cfg, err := LoadFromReader(strings.NewReader(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ep := cfg.Endpoints["bird-api"]
+	if ep.Auth.Type != "header" {
+		t.Errorf("expected auth type 'header', got %s", ep.Auth.Type)
+	}
+	if ep.Auth.Header != "Authorization" {
+		t.Errorf("expected header 'Authorization', got %s", ep.Auth.Header)
+	}
+	if ep.Auth.Prefix != "AccessKey " {
+		t.Errorf("expected prefix 'AccessKey ', got %s", ep.Auth.Prefix)
+	}
+}
+
+func TestLoadConfig_HeaderAuthMissingHeader(t *testing.T) {
+	yaml := `
+endpoints:
+  bad:
+    upstream: https://example.com
+    auth:
+      type: header
+      credential_env: SOME_KEY
+`
+	_, err := LoadFromReader(strings.NewReader(yaml))
+	if err == nil {
+		t.Fatal("expected error for header auth without header field")
+	}
+	if !strings.Contains(err.Error(), "header") {
+		t.Errorf("error should mention 'header': %v", err)
+	}
+}
+
+func TestLoadConfig_HeaderAuthNoPrefix(t *testing.T) {
+	yaml := `
+endpoints:
+  api:
+    upstream: https://example.com
+    auth:
+      type: header
+      header: X-Api-Key
+      credential_env: SOME_KEY
+`
+	cfg, err := LoadFromReader(strings.NewReader(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ep := cfg.Endpoints["api"]
+	if ep.Auth.Prefix != "" {
+		t.Errorf("expected empty prefix, got %q", ep.Auth.Prefix)
+	}
+}
+
 func TestLoadConfig_CapabilitiesWithoutPreset(t *testing.T) {
 	yaml := `
 endpoints:

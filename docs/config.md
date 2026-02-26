@@ -193,7 +193,7 @@ endpoints:
 | `description` | string | Yes | Human-readable description |
 | `upstream` | string | Yes | Base URL of the API |
 | `docs_url` | string | No | Link to API documentation (exposed in discovery) |
-| `auth_type` | string | Yes | Auth type (`bearer` or `plain`) |
+| `auth_type` | string | Yes | Auth type (`bearer`, `header`, or `plain`) |
 | `capabilities` | array | No | List of named capabilities |
 | `default_rules` | array | No | Default rules when no capabilities specified |
 
@@ -429,8 +429,10 @@ Authentication configuration for the upstream service.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | Yes* | Authentication type (`bearer`) |
+| `type` | string | Yes* | Authentication type (`bearer`, `header`, `plain`) |
 | `credential_env` | string | Yes* | Environment variable containing the credential |
+| `header` | string | No | Header name (required when `type: header`) |
+| `prefix` | string | No | Value prefix (optional, used with `type: header`) |
 | `sealed` | bool | No | Credentials come from agent's encrypted `X-Wardgate-Sealed-*` headers |
 
 \* Not required when `sealed: true`.
@@ -441,6 +443,13 @@ auth:
   type: bearer
   credential_env: WARDGATE_CRED_TODOIST_API_KEY
 
+# Custom header auth (any header name and optional prefix)
+auth:
+  type: header
+  header: Authorization
+  prefix: "AccessKey "
+  credential_env: WARDGATE_CRED_BIRD_API_KEY
+
 # Sealed credentials (agent provides encrypted values)
 auth:
   sealed: true
@@ -448,6 +457,7 @@ auth:
 
 Currently supported types:
 - `bearer` - Adds `Authorization: Bearer <credential>` header
+- `header` - Sets a custom header: `<header>: <prefix><credential>`. Requires `header` field; `prefix` is optional.
 - `plain` - For IMAP: credential format is `username:password`
 
 When `sealed: true`, the agent sends encrypted header values prefixed with `X-Wardgate-Sealed-*`. Wardgate decrypts and forwards them. See **[Sealed Credentials](sealed-credentials.md)** for full documentation.
