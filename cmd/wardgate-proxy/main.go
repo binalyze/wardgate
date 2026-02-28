@@ -28,11 +28,12 @@ var (
 
 // Config holds wardgate-proxy configuration.
 type Config struct {
-	Server string `yaml:"server"`
-	Key    string `yaml:"key"`
-	KeyEnv string `yaml:"key_env"`
-	Listen string `yaml:"listen"`
-	CAFile string `yaml:"ca_file"`
+	Server      string   `yaml:"server"`
+	Key         string   `yaml:"key"`
+	KeyEnv      string   `yaml:"key_env"`
+	Listen      string   `yaml:"listen"`
+	CAFile      string   `yaml:"ca_file"`
+	SealHeaders []string `yaml:"seal_headers"`
 }
 
 // KeyReader returns the current agent key.
@@ -153,8 +154,11 @@ func buildTransport(caFile string) (*http.Transport, error) {
 }
 
 // NewProxyHandler builds an http.Handler that reads an agent key from keyReader
-// and forwards every request to upstream with that key injected.
-func NewProxyHandler(upstream *url.URL, keyReader KeyReader, transport http.RoundTripper) http.Handler {
+// and forwards every request to upstream with that key injected. When sealHeaders
+// is non-nil, matching request headers are renamed with the X-Wardgate-Sealed-
+// prefix before forwarding, allowing agents to send pre-sealed credentials as
+// normal headers without knowing about Wardgate conventions.
+func NewProxyHandler(upstream *url.URL, keyReader KeyReader, transport http.RoundTripper, sealHeaders map[string]bool) http.Handler {
 	rp := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			key := req.Context().Value(ctxAgentKey).(string)
@@ -162,6 +166,27 @@ func NewProxyHandler(upstream *url.URL, keyReader KeyReader, transport http.Roun
 			req.URL.Scheme = upstream.Scheme
 			req.URL.Host = upstream.Host
 			req.Host = upstream.Host
+
+			// Auto-seal: rename matching headers before agent key injection.
+			if sealHeaders != nil {
+				type entry struct {
+					name   string
+					values []string
+				}
+				var toSeal []entry
+				for name, values := range req.Header {
+					if sealHeaders[http.CanonicalHeaderKey(name)] {
+						toSeal = append(toSeal, entry{name, values})
+					}
+				}
+				for _, e := range toSeal {
+					req.Header.Del(e.name)
+					for _, v := range e.values {
+						req.Header.Add(sealedHeaderPrefix+e.name, v)
+					}
+				}
+			}
+
 			req.Header.Set("Authorization", "Bearer "+key)
 			req.Header.Del("X-Forwarded-For")
 		},
@@ -186,6 +211,8 @@ func NewProxyHandler(upstream *url.URL, keyReader KeyReader, transport http.Roun
 type contextKey string
 
 const ctxAgentKey contextKey = "agentKey"
+
+const sealedHeaderPrefix = "X-Wardgate-Sealed-"
 
 // resolveConfig loads the config file and applies flag overrides.
 func resolveConfig(configPath string, configExplicit bool, listen, server, keyEnv string) *Config {
@@ -276,7 +303,17 @@ func main() {
 		log.Fatalf("Error: cannot read agent key: %v", err)
 	}
 
-	handler := NewProxyHandler(upstream, keyReader, transport)
+	// Build seal headers lookup map.
+	var sealHeaders map[string]bool
+	if len(cfg.SealHeaders) > 0 {
+		sealHeaders = make(map[string]bool, len(cfg.SealHeaders))
+		for _, h := range cfg.SealHeaders {
+			sealHeaders[http.CanonicalHeaderKey(h)] = true
+		}
+		log.Printf("auto-seal enabled for headers: %v", cfg.SealHeaders)
+	}
+
+	handler := NewProxyHandler(upstream, keyReader, transport, sealHeaders)
 
 	srv := &http.Server{
 		Addr:    cfg.Listen,

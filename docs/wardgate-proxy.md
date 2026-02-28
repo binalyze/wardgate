@@ -82,6 +82,7 @@ ca_file: /etc/wardgate-proxy/ca.pem
 | `key_env` | Environment variable containing the agent key | -- |
 | `listen` | Local address to listen on | `127.0.0.1:18080` |
 | `ca_file` | Path to custom CA certificate (PEM) | -- |
+| `seal_headers` | Headers to auto-rename with `X-Wardgate-Sealed-` prefix | -- |
 
 One of `key` or `key_env` is required.
 
@@ -104,6 +105,33 @@ wardgate-proxy \
 | `-key-env` | Environment variable containing agent key |
 | `-listen` | Listen address |
 | `-version` | Show version and exit |
+
+## Auto-Seal Headers
+
+When agents send pre-sealed (encrypted) credential values as regular HTTP headers, `seal_headers` makes the proxy automatically rename them with the `X-Wardgate-Sealed-` prefix. This keeps agents unaware of Wardgate conventions -- they send normal headers, and the proxy converts them transparently.
+
+```yaml
+server: https://wardgate.example.com
+key_env: WARDGATE_AGENT_KEY
+seal_headers:
+  - Authorization
+  - X-Api-Key
+```
+
+With this config, the proxy transforms requests like this:
+
+```
+Agent sends:      Authorization: <pre-sealed-value>
+                  X-Api-Key: <pre-sealed-value>
+
+Proxy forwards:   Authorization: Bearer <agent-key>
+                  X-Wardgate-Sealed-Authorization: <pre-sealed-value>
+                  X-Wardgate-Sealed-X-Api-Key: <pre-sealed-value>
+```
+
+The Wardgate server then decrypts the sealed headers and injects the real credentials for the upstream call.
+
+Headers not listed in `seal_headers` are forwarded unchanged. If `seal_headers` is omitted, no conversion happens and behavior is identical to previous versions.
 
 ## Key Resolution
 

@@ -309,7 +309,7 @@ func TestProxyHandler_InjectsBearer(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "test-agent-key"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "test-agent-key"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -337,7 +337,7 @@ func TestProxyHandler_ForwardsPath(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -357,7 +357,7 @@ func TestProxyHandler_ForwardsQueryParams(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -377,7 +377,7 @@ func TestProxyHandler_ForwardsMethod(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -399,7 +399,7 @@ func TestProxyHandler_ForwardsRequestBody(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -419,7 +419,7 @@ func TestProxyHandler_ForwardsCustomHeaders(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -441,7 +441,7 @@ func TestProxyHandler_StripsAgentAuth(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "proxy-key"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "proxy-key"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -457,7 +457,7 @@ func TestProxyHandler_StripsAgentAuth(t *testing.T) {
 func TestProxyHandler_Returns502OnKeyError(t *testing.T) {
 	cr := newConfigKeyReader("/nonexistent/config.yaml")
 	u, _ := url.Parse("http://localhost:1")
-	handler := NewProxyHandler(u, cr, http.DefaultTransport)
+	handler := NewProxyHandler(u, cr, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -478,7 +478,7 @@ func TestProxyHandler_Returns502OnKeyError(t *testing.T) {
 
 func TestProxyHandler_Returns502OnUpstreamDown(t *testing.T) {
 	u, _ := url.Parse("http://127.0.0.1:1") // nothing listening
-	handler := NewProxyHandler(u, &staticKeyReader{key: "valid-key"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "valid-key"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -501,7 +501,7 @@ func TestProxyHandler_ReturnsUpstreamStatus(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -539,7 +539,7 @@ func TestProxyHandler_StreamsSSE(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "sse-key"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "sse-key"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -577,7 +577,7 @@ func TestProxyHandler_StreamsChunked(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "stream-key"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "stream-key"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -613,7 +613,7 @@ func TestE2E_KeyRotation(t *testing.T) {
 	path := writeKeyFile(t, "key-v1")
 	cr := newConfigKeyReader(path)
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, cr, http.DefaultTransport)
+	handler := NewProxyHandler(u, cr, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -669,7 +669,7 @@ func TestE2E_FullProxyLifecycle(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "e2e-agent-key"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "e2e-agent-key"}, http.DefaultTransport, nil)
 
 	// Start on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -723,7 +723,7 @@ func TestE2E_ConcurrentRequestsDuringRotation(t *testing.T) {
 	path := writeKeyFile(t, "initial-key")
 	cr := newConfigKeyReader(path)
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, cr, http.DefaultTransport)
+	handler := NewProxyHandler(u, cr, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -789,7 +789,7 @@ func TestE2E_SSEWithKeyInjection(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "sse-key"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "sse-key"}, http.DefaultTransport, nil)
 
 	listener, _ := net.Listen("tcp", "127.0.0.1:0")
 	srv := &http.Server{Handler: handler}
@@ -826,7 +826,7 @@ func TestE2E_LargeResponseBody(t *testing.T) {
 	defer upstream.Close()
 
 	u, _ := url.Parse(upstream.URL)
-	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, nil)
 	proxy := httptest.NewServer(handler)
 	defer proxy.Close()
 
@@ -869,6 +869,209 @@ func TestBuildTransport_InvalidPEM(t *testing.T) {
 	_, err := buildTransport(caPath)
 	if err == nil {
 		t.Fatal("expected error for invalid PEM")
+	}
+}
+
+// --- Auto-seal header tests ---
+
+func TestProxyHandler_SealHeaders_RenamesAuthorization(t *testing.T) {
+	var gotAuth, gotSealedAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotSealedAuth = r.Header.Get("X-Wardgate-Sealed-Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	u, _ := url.Parse(upstream.URL)
+	sealHeaders := map[string]bool{
+		http.CanonicalHeaderKey("Authorization"): true,
+	}
+	handler := NewProxyHandler(u, &staticKeyReader{key: "agent-key"}, http.DefaultTransport, sealHeaders)
+	proxy := httptest.NewServer(handler)
+	defer proxy.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, proxy.URL+"/test", nil)
+	req.Header.Set("Authorization", "sealed-encrypted-value")
+	http.DefaultClient.Do(req)
+
+	if gotAuth != "Bearer agent-key" {
+		t.Errorf("Authorization: got %q, want %q", gotAuth, "Bearer agent-key")
+	}
+	if gotSealedAuth != "sealed-encrypted-value" {
+		t.Errorf("X-Wardgate-Sealed-Authorization: got %q, want %q", gotSealedAuth, "sealed-encrypted-value")
+	}
+}
+
+func TestProxyHandler_SealHeaders_RenamesMultipleHeaders(t *testing.T) {
+	var gotHeaders http.Header
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHeaders = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	u, _ := url.Parse(upstream.URL)
+	sealHeaders := map[string]bool{
+		http.CanonicalHeaderKey("Authorization"): true,
+		http.CanonicalHeaderKey("X-Api-Key"):     true,
+	}
+	handler := NewProxyHandler(u, &staticKeyReader{key: "agent-key"}, http.DefaultTransport, sealHeaders)
+	proxy := httptest.NewServer(handler)
+	defer proxy.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, proxy.URL+"/test", nil)
+	req.Header.Set("Authorization", "sealed-auth-value")
+	req.Header.Set("X-Api-Key", "sealed-api-key-value")
+	http.DefaultClient.Do(req)
+
+	if gotHeaders.Get("Authorization") != "Bearer agent-key" {
+		t.Errorf("Authorization: got %q, want %q", gotHeaders.Get("Authorization"), "Bearer agent-key")
+	}
+	if gotHeaders.Get("X-Wardgate-Sealed-Authorization") != "sealed-auth-value" {
+		t.Errorf("X-Wardgate-Sealed-Authorization: got %q, want %q", gotHeaders.Get("X-Wardgate-Sealed-Authorization"), "sealed-auth-value")
+	}
+	if gotHeaders.Get("X-Api-Key") != "" {
+		t.Errorf("X-Api-Key should be removed, got %q", gotHeaders.Get("X-Api-Key"))
+	}
+	if gotHeaders.Get("X-Wardgate-Sealed-X-Api-Key") != "sealed-api-key-value" {
+		t.Errorf("X-Wardgate-Sealed-X-Api-Key: got %q, want %q", gotHeaders.Get("X-Wardgate-Sealed-X-Api-Key"), "sealed-api-key-value")
+	}
+}
+
+func TestProxyHandler_SealHeaders_NilNoConversion(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for name := range r.Header {
+			if strings.HasPrefix(name, "X-Wardgate-Sealed-") {
+				t.Errorf("unexpected sealed header: %s", name)
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	u, _ := url.Parse(upstream.URL)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "agent-key"}, http.DefaultTransport, nil)
+	proxy := httptest.NewServer(handler)
+	defer proxy.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, proxy.URL+"/test", nil)
+	req.Header.Set("Authorization", "should-be-overwritten")
+	http.DefaultClient.Do(req)
+}
+
+func TestProxyHandler_SealHeaders_NonMatchingPassThrough(t *testing.T) {
+	var gotCustom string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCustom = r.Header.Get("X-Custom-Header")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	u, _ := url.Parse(upstream.URL)
+	sealHeaders := map[string]bool{
+		http.CanonicalHeaderKey("Authorization"): true,
+	}
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, sealHeaders)
+	proxy := httptest.NewServer(handler)
+	defer proxy.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, proxy.URL+"/test", nil)
+	req.Header.Set("X-Custom-Header", "stays-as-is")
+	http.DefaultClient.Do(req)
+
+	if gotCustom != "stays-as-is" {
+		t.Errorf("X-Custom-Header: got %q, want %q", gotCustom, "stays-as-is")
+	}
+}
+
+func TestProxyHandler_SealHeaders_MissingHeaderNotAdded(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Wardgate-Sealed-X-Api-Key") != "" {
+			t.Error("sealed header should not exist for absent original header")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	u, _ := url.Parse(upstream.URL)
+	sealHeaders := map[string]bool{
+		http.CanonicalHeaderKey("X-Api-Key"): true,
+	}
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, sealHeaders)
+	proxy := httptest.NewServer(handler)
+	defer proxy.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, proxy.URL+"/test", nil)
+	http.DefaultClient.Do(req)
+}
+
+func TestProxyHandler_SealHeaders_MultipleValues(t *testing.T) {
+	var gotSealedValues []string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotSealedValues = r.Header.Values("X-Wardgate-Sealed-X-Auth-Token")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	u, _ := url.Parse(upstream.URL)
+	sealHeaders := map[string]bool{
+		http.CanonicalHeaderKey("X-Auth-Token"): true,
+	}
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, sealHeaders)
+	proxy := httptest.NewServer(handler)
+	defer proxy.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, proxy.URL+"/test", nil)
+	req.Header.Add("X-Auth-Token", "value-1")
+	req.Header.Add("X-Auth-Token", "value-2")
+	http.DefaultClient.Do(req)
+
+	if len(gotSealedValues) != 2 {
+		t.Fatalf("expected 2 sealed values, got %d", len(gotSealedValues))
+	}
+	if gotSealedValues[0] != "value-1" || gotSealedValues[1] != "value-2" {
+		t.Errorf("got sealed values %v", gotSealedValues)
+	}
+}
+
+func TestLoadConfig_SealHeaders(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	os.WriteFile(cfgPath, []byte(`
+server: https://gateway.example.com
+key: my-key
+seal_headers:
+  - Authorization
+  - X-Api-Key
+`), 0o600)
+
+	cfg, err := loadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.SealHeaders) != 2 {
+		t.Fatalf("expected 2 seal_headers, got %d", len(cfg.SealHeaders))
+	}
+	if cfg.SealHeaders[0] != "Authorization" || cfg.SealHeaders[1] != "X-Api-Key" {
+		t.Errorf("got seal_headers %v", cfg.SealHeaders)
+	}
+}
+
+func TestLoadConfig_SealHeadersEmpty(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	os.WriteFile(cfgPath, []byte(`
+server: https://gateway.example.com
+key: my-key
+`), 0o600)
+
+	cfg, err := loadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.SealHeaders) != 0 {
+		t.Errorf("expected empty seal_headers, got %v", cfg.SealHeaders)
 	}
 }
 

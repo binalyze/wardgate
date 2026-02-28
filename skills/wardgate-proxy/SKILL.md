@@ -105,7 +105,9 @@ curl -H "Accept: application/json" \
 
 ### Sealed credentials
 
-If the endpoint is configured for sealed credentials, you can send encrypted headers via `X-Wardgate-Sealed-*` prefixed headers. The Wardgate server decrypts them before forwarding to the upstream.
+If the endpoint is configured for sealed credentials, the proxy can be configured to automatically convert your regular headers into `X-Wardgate-Sealed-*` headers. This means you send normal headers and the proxy handles the conversion transparently -- no special header names needed.
+
+If auto-seal is not configured, you can send encrypted headers via `X-Wardgate-Sealed-*` prefixed headers directly. The Wardgate server decrypts them before forwarding to the upstream.
 
 ```bash
 # Encrypt a credential with the endpoint's public seal key, then send it:
