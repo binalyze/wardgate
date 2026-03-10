@@ -1176,6 +1176,32 @@ key: my-key
 	}
 }
 
+// --- X-Forwarded-For suppression ---
+
+func TestProxyHandler_SuppressesXForwardedFor(t *testing.T) {
+	var gotXFF string
+	var xffPresent bool
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotXFF = r.Header.Get("X-Forwarded-For")
+		_, xffPresent = r.Header["X-Forwarded-For"]
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	u, _ := url.Parse(upstream.URL)
+	handler := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, nil)
+	proxy := httptest.NewServer(handler)
+	defer proxy.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, proxy.URL+"/test", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	http.DefaultClient.Do(req)
+
+	if xffPresent {
+		t.Errorf("X-Forwarded-For should not be present upstream, got %q", gotXFF)
+	}
+}
+
 // --- Helpers ---
 
 // writeKeyFile writes a config YAML with the given key and returns the path.

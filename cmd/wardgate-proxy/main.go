@@ -176,7 +176,7 @@ func NewProxyHandler(upstream *url.URL, keyReader KeyReader, transport http.Roun
 			}
 
 			req.Header.Set("Authorization", "Bearer "+key)
-			req.Header.Del("X-Forwarded-For")
+			req.Header["X-Forwarded-For"] = nil
 		},
 		FlushInterval: -1, // flush immediately for SSE and streaming
 		Transport:     transport,

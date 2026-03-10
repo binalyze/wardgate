@@ -206,6 +206,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Strip the upstream header before forwarding
 			req.Header.Del(upstreamHeader)
 
+			// Suppress X-Forwarded-For to avoid leaking internal topology.
+			// Using nil (not Del) prevents Go's ReverseProxy from re-adding
+			// the client IP.
+			req.Header["X-Forwarded-For"] = nil
+
 			if p.endpoint.Auth.Sealed && p.sealer != nil {
 				p.processSealedHeaders(req, r.Header)
 			} else if p.endpoint.Auth.Type == "bearer" {

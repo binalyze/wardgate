@@ -1445,3 +1445,32 @@ func TestProxy_NonSSEFilterUnchanged(t *testing.T) {
 		t.Errorf("expected 403 for non-SSE blocked content, got %d", rec.Code)
 	}
 }
+
+func TestProxy_SuppressesXForwardedFor(t *testing.T) {
+	var xffPresent bool
+	var gotXFF string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotXFF = r.Header.Get("X-Forwarded-For")
+		_, xffPresent = r.Header["X-Forwarded-For"]
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	vault := &mockVault{creds: map[string]string{"TEST_CRED": "secret-token"}}
+	endpoint := config.Endpoint{
+		Upstream: upstream.URL,
+		Auth:     config.AuthConfig{Type: "bearer", CredentialEnv: "TEST_CRED"},
+	}
+	engine := policy.New([]config.Rule{{Match: config.Match{Method: "*"}, Action: "allow"}})
+
+	proxy := New(endpoint, vault, engine)
+	req := httptest.NewRequest("GET", "/tasks", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	rec := httptest.NewRecorder()
+
+	proxy.ServeHTTP(rec, req)
+
+	if xffPresent {
+		t.Errorf("X-Forwarded-For should not be present upstream, got %q", gotXFF)
+	}
+}
