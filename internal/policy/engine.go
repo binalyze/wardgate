@@ -193,11 +193,15 @@ func matchPath(pattern, path string) bool {
 // Supports * as a wildcard for a single path segment.
 // Supports ** or trailing * for matching multiple segments.
 func MatchGlob(pattern, path string) bool {
-	// Trailing wildcard: "/tasks*" or "/tasks/*"
+	// Trailing wildcard: "/tasks*" or "/tasks/*" matches multiple segments
 	if strings.HasSuffix(pattern, "*") && !strings.HasSuffix(pattern, "**") {
 		prefix := strings.TrimSuffix(pattern, "*")
 		prefix = strings.TrimSuffix(prefix, "/")
-		return strings.HasPrefix(path, prefix)
+		if !strings.Contains(prefix, "*") {
+			return strings.HasPrefix(path, prefix)
+		}
+		// Mid-path wildcards present: promote trailing * to ** for segment matching
+		pattern = pattern[:len(pattern)-1] + "**"
 	}
 
 	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")

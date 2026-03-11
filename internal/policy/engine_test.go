@@ -191,6 +191,31 @@ func TestEngine_GlobPatternDoubleWildcard(t *testing.T) {
 	}
 }
 
+func TestEngine_GlobTrailingWildcardWithMidPathWildcard(t *testing.T) {
+	rules := []config.Rule{
+		{Match: config.Match{Method: "POST", Path: "/client/v4/accounts/*/ai-search/*"}, Action: "allow"},
+		{Match: config.Match{Method: "*"}, Action: "deny"},
+	}
+	engine := New(rules)
+
+	tests := []struct {
+		path   string
+		expect Action
+	}{
+		{"/client/v4/accounts/abc123/ai-search/query", Allow},
+		{"/client/v4/accounts/abc123/ai-search/instances/kb/search", Allow},
+		{"/client/v4/accounts/abc123/other/stuff", Deny},
+		{"/client/v4/accounts/abc123/ai-search", Deny},
+	}
+
+	for _, tt := range tests {
+		decision := engine.Evaluate("POST", tt.path)
+		if decision.Action != tt.expect {
+			t.Errorf("POST %s: expected %v, got %v", tt.path, tt.expect, decision.Action)
+		}
+	}
+}
+
 func TestEngine_RateLimiting(t *testing.T) {
 	rules := []config.Rule{
 		{
