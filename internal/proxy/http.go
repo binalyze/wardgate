@@ -266,7 +266,6 @@ func (p *Proxy) resolveUpstream(r *http.Request) (*url.URL, error) {
 // processSealedHeaders decrypts X-Wardgate-Sealed-* headers and sets the real
 // headers on the outgoing request. Only headers in the allowed whitelist are processed.
 func (p *Proxy) processSealedHeaders(req *http.Request, incoming http.Header) {
-	// Remove agent's Wardgate auth header before setting decrypted values
 	req.Header.Del("Authorization")
 
 	for name, values := range incoming {
@@ -279,17 +278,31 @@ func (p *Proxy) processSealedHeaders(req *http.Request, incoming http.Header) {
 			req.Header.Del(name)
 			continue
 		}
-		req.Header.Del(realHeader) // clear before Add loop so only decrypted values remain
+		req.Header.Del(realHeader)
 		for _, sealed := range values {
-			plaintext, err := p.sealer.Decrypt(sealed)
+			scheme, ciphertext := splitAuthScheme(sealed)
+			plaintext, err := p.sealer.Decrypt(ciphertext)
 			if err != nil {
 				log.Printf("failed to decrypt sealed header %q: %v", realHeader, err)
 				continue
 			}
-			req.Header.Add(realHeader, plaintext)
+			req.Header.Add(realHeader, scheme+plaintext)
 		}
 		req.Header.Del(name)
 	}
+}
+
+// splitAuthScheme strips a known HTTP auth scheme prefix (e.g. "Bearer ") from
+// a sealed header value so the remaining base64 ciphertext can be decrypted.
+// The prefix is returned separately so it can be re-added after decryption.
+// Valid base64 never contains spaces, so this never false-matches a pure sealed blob.
+func splitAuthScheme(value string) (scheme, ciphertext string) {
+	for _, prefix := range []string{"Bearer ", "Basic "} {
+		if strings.HasPrefix(value, prefix) {
+			return prefix, value[len(prefix):]
+		}
+	}
+	return "", value
 }
 
 // modifyResponse filters sensitive data from response bodies.

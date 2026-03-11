@@ -1056,6 +1056,66 @@ func TestProxy_SealedMultipleValuesForSameHeader(t *testing.T) {
 	}
 }
 
+func TestSplitAuthScheme(t *testing.T) {
+	tests := []struct {
+		input      string
+		wantScheme string
+		wantRest   string
+	}{
+		{"Bearer abc123", "Bearer ", "abc123"},
+		{"Basic dXNlcjpwYXNz", "Basic ", "dXNlcjpwYXNz"},
+		{"abc123noprefix", "", "abc123noprefix"},
+		{"", "", ""},
+		{"bearer lowercase", "", "bearer lowercase"},
+	}
+	for _, tt := range tests {
+		scheme, rest := splitAuthScheme(tt.input)
+		if scheme != tt.wantScheme || rest != tt.wantRest {
+			t.Errorf("splitAuthScheme(%q) = (%q, %q), want (%q, %q)",
+				tt.input, scheme, rest, tt.wantScheme, tt.wantRest)
+		}
+	}
+}
+
+func TestProxy_SealedBearerPrefixStripped(t *testing.T) {
+	var receivedAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	sealer := newTestSealer(t)
+	// Seal just the API key (not "Bearer <key>") to match how the sandbox DO works
+	sealedKey, _ := sealer.Encrypt("sk-real-api-key-12345")
+
+	vault := &mockVault{creds: map[string]string{}}
+	endpoint := config.Endpoint{
+		Upstream: upstream.URL,
+		Auth:     config.AuthConfig{Sealed: true},
+	}
+	engine := policy.New([]config.Rule{{Match: config.Match{Method: "*"}, Action: "allow"}})
+
+	p := New(endpoint, vault, engine)
+	p.SetSealer(sealer)
+	p.SetAllowedSealHeaders(DefaultAllowedSealHeaders)
+
+	req := httptest.NewRequest("POST", "/responses", nil)
+	req.Header.Set("Authorization", "Bearer agent-jwt")
+	// SDK adds "Bearer " prefix to the sealed key, proxy renames the full value
+	req.Header.Set("X-Wardgate-Sealed-Authorization", "Bearer "+sealedKey)
+	rec := httptest.NewRecorder()
+
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if receivedAuth != "Bearer sk-real-api-key-12345" {
+		t.Errorf("expected decrypted auth with Bearer prefix, got %q", receivedAuth)
+	}
+}
+
 func TestProxy_DynamicUpstreamAllowed(t *testing.T) {
 	var receivedHost string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
