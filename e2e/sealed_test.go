@@ -314,6 +314,36 @@ func TestSealedCredentials_E2E(t *testing.T) {
 		}
 	})
 
+	t.Run("sealed GET with Bearer-prefixed value: SDK auto-prepends scheme", func(t *testing.T) {
+		// Simulate the flow where an SDK (e.g. OpenAI) auto-prepends "Bearer "
+		// to the sealed API key. The sealed value does NOT include "Bearer ".
+		sealedKeyOnly, err := sealer.Encrypt("ghp_realtoken123")
+		if err != nil {
+			t.Fatalf("Encrypt key only: %v", err)
+		}
+
+		req, _ := http.NewRequest("GET", gw.URL+"/sealed-api/repos/owner/repo", nil)
+		req.Header.Set("Authorization", "Bearer "+agentKey)
+		// "Bearer " is prepended to the sealed value, mimicking SDK behavior
+		req.Header.Set("X-Wardgate-Sealed-Authorization", "Bearer "+sealedKeyOnly)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+		}
+
+		// Upstream should receive "Bearer <decrypted_key>" — the scheme is preserved
+		if got := lastUpstreamReq.headers.Get("Authorization"); got != "Bearer ghp_realtoken123" {
+			t.Errorf("upstream Authorization = %q, want %q", got, "Bearer ghp_realtoken123")
+		}
+	})
+
 	t.Run("sealed endpoint with custom non-auth header", func(t *testing.T) {
 		sealedCustom, err := sealer.Encrypt("custom-value-123")
 		if err != nil {

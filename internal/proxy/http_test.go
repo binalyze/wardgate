@@ -1446,6 +1446,78 @@ func TestProxy_NonSSEFilterUnchanged(t *testing.T) {
 	}
 }
 
+func TestStripAuthScheme(t *testing.T) {
+	tests := []struct {
+		name       string
+		header     string
+		value      string
+		wantScheme string
+		wantRest   string
+	}{
+		{"Bearer prefix on Authorization", "Authorization", "Bearer sealed123", "Bearer ", "sealed123"},
+		{"Basic prefix on Authorization", "Authorization", "Basic sealed123", "Basic ", "sealed123"},
+		{"no prefix on Authorization", "Authorization", "sealed123", "", "sealed123"},
+		{"Bearer on non-Authorization header", "X-Api-Key", "Bearer sealed123", "", "Bearer sealed123"},
+		{"case-insensitive header match", "authorization", "Bearer sealed123", "Bearer ", "sealed123"},
+		{"empty value", "Authorization", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme, rest := stripAuthScheme(tt.header, tt.value)
+			if scheme != tt.wantScheme {
+				t.Errorf("scheme = %q, want %q", scheme, tt.wantScheme)
+			}
+			if rest != tt.wantRest {
+				t.Errorf("rest = %q, want %q", rest, tt.wantRest)
+			}
+		})
+	}
+}
+
+func TestProxy_SealedBearerPrefixedValue(t *testing.T) {
+	var receivedAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	sealer := newTestSealer(t)
+	// Seal only the raw API key (no "Bearer " prefix), mimicking the platform's
+	// sealValue(env.OPENAI_API_KEY, ...) which seals just the key.
+	sealedKeyOnly, err := sealer.Encrypt("sk-realkey123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vault := &mockVault{creds: map[string]string{}}
+	endpoint := config.Endpoint{
+		Upstream: upstream.URL,
+		Auth:     config.AuthConfig{Sealed: true},
+	}
+	engine := policy.New([]config.Rule{{Match: config.Match{Method: "*"}, Action: "allow"}})
+
+	p := New(endpoint, vault, engine)
+	p.SetSealer(sealer)
+	p.SetAllowedSealHeaders(DefaultAllowedSealHeaders)
+
+	req := httptest.NewRequest("POST", "/responses", nil)
+	req.Header.Set("Authorization", "Bearer agent-jwt")
+	// SDK auto-prepends "Bearer " to the sealed API key
+	req.Header.Set("X-Wardgate-Sealed-Authorization", "Bearer "+sealedKeyOnly)
+	rec := httptest.NewRecorder()
+
+	p.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	// Should reconstruct "Bearer <decrypted_key>"
+	if receivedAuth != "Bearer sk-realkey123" {
+		t.Errorf("expected 'Bearer sk-realkey123', got %q", receivedAuth)
+	}
+}
+
 func TestProxy_SuppressesXForwardedFor(t *testing.T) {
 	var xffPresent bool
 	var gotXFF string

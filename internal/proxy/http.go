@@ -268,6 +268,10 @@ func (p *Proxy) resolveUpstream(r *http.Request) (*url.URL, error) {
 	return nil, fmt.Errorf("no upstream configured and no %s header provided", upstreamHeader)
 }
 
+// knownAuthSchemes lists auth scheme prefixes that HTTP client SDKs
+// automatically prepend to API keys in the Authorization header.
+var knownAuthSchemes = []string{"Bearer ", "Basic "}
+
 // processSealedHeaders decrypts X-Wardgate-Sealed-* headers and sets the real
 // headers on the outgoing request. Only headers in the allowed whitelist are processed.
 func (p *Proxy) processSealedHeaders(req *http.Request, incoming http.Header) {
@@ -286,15 +290,35 @@ func (p *Proxy) processSealedHeaders(req *http.Request, incoming http.Header) {
 		}
 		req.Header.Del(realHeader) // clear before Add loop so only decrypted values remain
 		for _, sealed := range values {
-			plaintext, err := p.sealer.Decrypt(sealed)
+			// SDKs (e.g. OpenAI) prepend "Bearer " to the API key in the
+			// Authorization header. Strip the scheme prefix before decrypting
+			// and re-add it to the decrypted value.
+			scheme, sealedVal := stripAuthScheme(realHeader, sealed)
+
+			plaintext, err := p.sealer.Decrypt(sealedVal)
 			if err != nil {
 				log.Printf("failed to decrypt sealed header %q: %v", realHeader, err)
 				continue
 			}
-			req.Header.Add(realHeader, plaintext)
+			req.Header.Add(realHeader, scheme+plaintext)
 		}
 		req.Header.Del(name)
 	}
+}
+
+// stripAuthScheme strips known auth scheme prefixes from Authorization header
+// values so the raw sealed credential can be decrypted. Returns the stripped
+// prefix (empty string if none) and the remaining value.
+func stripAuthScheme(header, value string) (scheme, rest string) {
+	if http.CanonicalHeaderKey(header) != "Authorization" {
+		return "", value
+	}
+	for _, s := range knownAuthSchemes {
+		if strings.HasPrefix(value, s) {
+			return s, strings.TrimPrefix(value, s)
+		}
+	}
+	return "", value
 }
 
 // modifyResponse filters sensitive data from response bodies.
