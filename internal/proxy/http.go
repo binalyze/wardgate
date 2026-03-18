@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/wardgate/wardgate/internal/approval"
+	"github.com/wardgate/wardgate/internal/audit"
 	"github.com/wardgate/wardgate/internal/auth"
 	"github.com/wardgate/wardgate/internal/config"
 	"github.com/wardgate/wardgate/internal/filter"
@@ -49,6 +50,7 @@ type Proxy struct {
 	grantStore         *grants.Store
 	sealer             *seal.Sealer
 	allowedSealHeaders map[string]bool
+	logger             *audit.Logger
 }
 
 // SetSealer sets the sealer for decrypting sealed credential headers.
@@ -117,6 +119,11 @@ func (p *Proxy) SetTimeout(d time.Duration) {
 // SetFilter sets the sensitive data filter for response filtering.
 func (p *Proxy) SetFilter(f *filter.Filter) {
 	p.filter = f
+}
+
+// SetLogger sets the audit logger for structured error logging.
+func (p *Proxy) SetLogger(l *audit.Logger) {
+	p.logger = l
 }
 
 // ServeHTTP handles incoming requests.
@@ -195,6 +202,18 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Capture request context for error logging closures.
+	reqCtx := audit.Entry{
+		RequestID:       r.Header.Get("X-Request-ID"),
+		Endpoint:        p.endpointName,
+		Method:          r.Method,
+		Path:            r.URL.String(),
+		Upstream:        target.String(),
+		SourceIP:        r.RemoteAddr,
+		AgentID:         agentID,
+		RequestBodySize: r.ContentLength,
+	}
+
 	// Create reverse proxy
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
@@ -223,13 +242,24 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 		ModifyResponse: p.modifyResponse,
 		FlushInterval:  -1, // Enable immediate flushing for streaming responses
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			if ctx := r.Context(); ctx.Err() == context.DeadlineExceeded {
+		ErrorHandler: func(w http.ResponseWriter, req *http.Request, err error) {
+			if p.logger != nil {
+				entry := reqCtx
+				entry.Error = err.Error()
+				p.logger.LogError(entry)
+			}
+			if ctx := req.Context(); ctx.Err() == context.DeadlineExceeded {
 				http.Error(w, "upstream timeout", http.StatusGatewayTimeout)
 				return
 			}
 			http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
 		},
+	}
+
+	// Route httputil internal errors (e.g. body copy failures) through the
+	// structured audit logger instead of Go's default stderr logger.
+	if p.logger != nil {
+		proxy.ErrorLog = log.New(&proxyErrorWriter{logger: p.logger, ctx: reqCtx}, "", 0)
 	}
 
 	// Apply timeout
@@ -400,4 +430,19 @@ func isTextContent(contentType string) bool {
 		strings.Contains(ct, "application/json") ||
 		strings.Contains(ct, "application/xml") ||
 		strings.Contains(ct, "application/javascript")
+}
+
+// proxyErrorWriter adapts httputil's ErrorLog (which requires a *log.Logger)
+// to write through the structured audit logger with per-request context.
+// It captures body copy errors that ErrorHandler never sees.
+type proxyErrorWriter struct {
+	logger *audit.Logger
+	ctx    audit.Entry
+}
+
+func (w *proxyErrorWriter) Write(p []byte) (int, error) {
+	entry := w.ctx
+	entry.Error = strings.TrimSpace(string(p))
+	w.logger.LogError(entry)
+	return len(p), nil
 }

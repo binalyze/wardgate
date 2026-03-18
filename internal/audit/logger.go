@@ -9,18 +9,20 @@ import (
 
 // Entry represents an audit log entry.
 type Entry struct {
-	RequestID      string `json:"request_id,omitempty"`
-	Endpoint       string `json:"endpoint,omitempty"`
-	Method         string `json:"method,omitempty"`
-	Path           string `json:"path,omitempty"`
-	Upstream       string `json:"upstream,omitempty"`
-	SourceIP       string `json:"source_ip,omitempty"`
-	AgentID        string `json:"agent,omitempty"`
-	Decision       string `json:"decision,omitempty"`
-	Message        string `json:"message,omitempty"`
-	UpstreamStatus int    `json:"upstream_status,omitempty"`
-	ResponseBytes  int64  `json:"response_bytes,omitempty"`
-	DurationMs     int64  `json:"duration_ms,omitempty"`
+	RequestID       string `json:"request_id,omitempty"`
+	Endpoint        string `json:"endpoint,omitempty"`
+	Method          string `json:"method,omitempty"`
+	Path            string `json:"path,omitempty"`
+	Upstream        string `json:"upstream,omitempty"`
+	SourceIP        string `json:"source_ip,omitempty"`
+	AgentID         string `json:"agent,omitempty"`
+	Decision        string `json:"decision,omitempty"`
+	Message         string `json:"message,omitempty"`
+	UpstreamStatus  int    `json:"upstream_status,omitempty"`
+	ResponseBytes   int64  `json:"response_bytes,omitempty"`
+	DurationMs      int64  `json:"duration_ms,omitempty"`
+	RequestBodySize int64  `json:"request_body_size,omitempty"`
+	Error           string `json:"error,omitempty"`
 }
 
 // Logger writes audit logs.
@@ -46,16 +48,25 @@ func (l *Logger) SetStoreBodies(enabled bool) {
 	l.storeBodies = enabled
 }
 
-// Log writes an audit entry.
+// Log writes an audit entry at info level.
 func (l *Logger) Log(e Entry) {
 	l.LogWithBody(e, "")
 }
 
-// LogWithBody writes an audit entry with an optional request body.
+// LogError writes an audit entry at error level.
+func (l *Logger) LogError(e Entry) {
+	l.logEntry(l.log.Error(), e, "")
+}
+
+// LogWithBody writes an audit entry at info level with an optional request body.
 func (l *Logger) LogWithBody(e Entry, body string) {
+	l.logEntry(l.log.Info(), e, body)
+}
+
+func (l *Logger) logEntry(event *zerolog.Event, e Entry, body string) {
 	ts := time.Now().UTC()
 
-	event := l.log.Info().
+	event.
 		Str("ts", ts.Format(time.RFC3339)).
 		Str("request_id", e.RequestID).
 		Str("endpoint", e.Endpoint).
@@ -81,6 +92,12 @@ func (l *Logger) LogWithBody(e Entry, body string) {
 	}
 	if e.ResponseBytes != 0 {
 		event = event.Int64("response_bytes", e.ResponseBytes)
+	}
+	if e.RequestBodySize > 0 {
+		event = event.Int64("request_body_size", e.RequestBodySize)
+	}
+	if e.Error != "" {
+		event = event.Str("error", e.Error)
 	}
 
 	event.Send()

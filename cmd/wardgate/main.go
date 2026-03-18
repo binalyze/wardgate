@@ -304,6 +304,7 @@ func main() {
 					p.SetTimeout(d)
 				}
 			}
+			p.SetLogger(auditLog)
 			h = auditMiddleware(auditLog, name, p)
 			target := endpoint.Upstream
 			if target == "" {
@@ -429,17 +430,18 @@ func auditMiddleware(logger *audit.Logger, endpoint string, next http.Handler) h
 		next.ServeHTTP(rw, r)
 
 		logger.Log(audit.Entry{
-			RequestID:      r.Header.Get("X-Request-ID"),
-			Endpoint:       endpoint,
-			Method:         r.Method,
-			Path:           r.URL.Path,
-			Upstream:       upstream,
-			SourceIP:       r.RemoteAddr,
-			AgentID:        r.Header.Get("X-Agent-ID"),
-			Decision:       decisionFromStatus(rw.status),
-			UpstreamStatus: rw.status,
-			ResponseBytes:  rw.bytes,
-			DurationMs:     time.Since(start).Milliseconds(),
+			RequestID:       r.Header.Get("X-Request-ID"),
+			Endpoint:        endpoint,
+			Method:          r.Method,
+			Path:            r.URL.Path,
+			Upstream:        upstream,
+			SourceIP:        r.RemoteAddr,
+			AgentID:         r.Header.Get("X-Agent-ID"),
+			Decision:        decisionFromStatus(rw.status),
+			UpstreamStatus:  rw.status,
+			ResponseBytes:   rw.bytes,
+			DurationMs:      time.Since(start).Milliseconds(),
+			RequestBodySize: r.ContentLength,
 		})
 	})
 }
