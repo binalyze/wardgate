@@ -1202,6 +1202,129 @@ func TestProxyHandler_SuppressesXForwardedFor(t *testing.T) {
 	}
 }
 
+// --- Health endpoint tests ---
+
+func TestHealthHandler_ReturnsOK(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(healthHandler))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("got status %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("got Content-Type %q, want application/json", ct)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), `"status":"ok"`) {
+		t.Errorf("body missing status:ok, got %q", string(body))
+	}
+	if !strings.Contains(string(body), `"service":"wardgate-proxy"`) {
+		t.Errorf("body missing service field, got %q", string(body))
+	}
+}
+
+func TestHealthHandler_HEADReturnsNoBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(healthHandler))
+	defer srv.Close()
+
+	req, _ := http.NewRequest(http.MethodHead, srv.URL+"/health", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("got status %d, want 200", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if len(body) != 0 {
+		t.Errorf("expected empty body for HEAD, got %q", string(body))
+	}
+}
+
+func TestHealthHandler_RejectsNonGET(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(healthHandler))
+	defer srv.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/health", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("got status %d, want 405", resp.StatusCode)
+	}
+	if allow := resp.Header.Get("Allow"); allow != "GET, HEAD" {
+		t.Errorf("got Allow %q, want %q", allow, "GET, HEAD")
+	}
+}
+
+func TestBuildMux_HealthBypassesProxy(t *testing.T) {
+	var upstreamHits atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	u, _ := url.Parse(upstream.URL)
+	proxy := NewProxyHandler(u, &staticKeyReader{key: "tok"}, http.DefaultTransport, nil)
+	mux := buildMux(proxy)
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatalf("health request failed: %v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("health got status %d, want 200", resp.StatusCode)
+	}
+	if upstreamHits.Load() != 0 {
+		t.Errorf("health hit upstream %d times; should be served locally", upstreamHits.Load())
+	}
+}
+
+func TestBuildMux_NonHealthGoesToProxy(t *testing.T) {
+	var gotPath string
+	var gotAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	u, _ := url.Parse(upstream.URL)
+	proxy := NewProxyHandler(u, &staticKeyReader{key: "agent-key"}, http.DefaultTransport, nil)
+	mux := buildMux(proxy)
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	resp, _ := http.Get(srv.URL + "/v1/chat/completions")
+	resp.Body.Close()
+
+	if gotPath != "/v1/chat/completions" {
+		t.Errorf("upstream path: got %q, want /v1/chat/completions", gotPath)
+	}
+	if gotAuth != "Bearer agent-key" {
+		t.Errorf("upstream auth: got %q, want %q", gotAuth, "Bearer agent-key")
+	}
+}
+
 // --- Helpers ---
 
 // writeKeyFile writes a config YAML with the given key and returns the path.

@@ -202,6 +202,35 @@ const ctxAgentKey contextKey = "agentKey"
 
 const sealedHeaderPrefix = "X-Wardgate-Sealed-"
 
+// healthHandler returns a small JSON payload confirming the proxy is up and
+// listening. Intended to be called over the local listen socket (e.g. by a
+// sidecar that needs to confirm wardgate-proxy is on path before forwarding
+// real traffic). It performs no upstream call and requires no agent key.
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	fmt.Fprintf(w, `{"status":"ok","service":"wardgate-proxy","version":%q}`, version)
+}
+
+// buildMux wires the local health endpoint and falls through to the proxy
+// handler for every other path. Kept as a separate function so tests can mount
+// the same routing without spawning a real listener.
+func buildMux(proxy http.Handler) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", healthHandler)
+	mux.Handle("/", proxy)
+	return mux
+}
+
 // resolveConfig loads the config file and applies flag overrides.
 func resolveConfig(configPath string, configExplicit bool, listen, server, keyEnv string) (*Config, error) {
 	cfg := &Config{Listen: "127.0.0.1:18080"}
@@ -308,7 +337,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:    cfg.Listen,
-		Handler: handler,
+		Handler: buildMux(handler),
 	}
 
 	done := make(chan os.Signal, 1)
